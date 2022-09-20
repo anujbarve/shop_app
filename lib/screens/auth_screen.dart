@@ -1,6 +1,10 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:shop_app/models/http_exception.dart';
+
+import '../providers/auth.dart';
 
 enum AuthMode { Signup, Login }
 
@@ -59,7 +63,10 @@ class AuthScreen extends StatelessWidget {
                       child: Text(
                         'MyShop',
                         style: TextStyle(
-                          color: Theme.of(context).accentTextTheme.titleLarge.color,
+                          color: Theme.of(context)
+                              .accentTextTheme
+                              .titleLarge
+                              .color,
                           fontSize: 50,
                           fontFamily: 'Anton',
                           fontWeight: FontWeight.normal,
@@ -100,7 +107,24 @@ class _AuthCardState extends State<AuthCard> {
   var _isLoading = false;
   final _passwordController = TextEditingController();
 
-  void _submit() {
+  void _showErrorDialog(String message) {
+    showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: Text('Error Occured'),
+              content: Text(message),
+              actions: [
+                FlatButton(
+                  child: Text('Okay'),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                  },
+                )
+              ],
+            ));
+  }
+
+  void _submit() async {
     if (!_formKey.currentState.validate()) {
       // Invalid!
       return;
@@ -109,11 +133,35 @@ class _AuthCardState extends State<AuthCard> {
     setState(() {
       _isLoading = true;
     });
-    if (_authMode == AuthMode.Login) {
-      // Log user in
-    } else {
-      // Sign user up
+    try {
+      if (_authMode == AuthMode.Login) {
+        await Provider.of<Auth>(context, listen: false)
+            .logIn(_authData['email'], _authData['password']);
+      } else {
+        await Provider.of<Auth>(context, listen: false)
+            .signUp(_authData['email'], _authData['password']);
+      }
+    } on HttpException catch (e) {
+      var errMess = 'Authentication Failed';
+      if (e.toString().contains('EMAIL_EXISTS')) {
+        errMess = 'This Email already exist';
+      } else if (e.toString().contains('INVALID_EMAIL')) {
+        errMess = 'This is not a valid email address';
+      } else if (e.toString().contains('WEAK_PASSWORD')) {
+        errMess = 'This password is too weak';
+      } else if (e.toString().contains('EMAIL_NOT_FOUND')) {
+        errMess = 'Could not find a user with that email';
+      } else if (e.toString().contains('INVALID_PASSWORD')) {
+        errMess = 'The password is invalid';
+      } else {
+        errMess = 'Undefined Error';
+      }
+      _showErrorDialog(errMess);
+    } catch (e) {
+      var errMess = 'Could not authenticate the user, please try again later';
+      _showErrorDialog(errMess);
     }
+    ;
     setState(() {
       _isLoading = false;
     });
